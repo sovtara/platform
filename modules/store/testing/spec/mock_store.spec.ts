@@ -1,12 +1,8 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
+import { Component, Injector } from '@angular/core';
+import { By } from '@angular/platform-browser';
+import { Observable } from 'rxjs';
 import { skip, take } from 'rxjs/operators';
-import {
-  getMockStore,
-  MockReducerManager,
-  MockState,
-  MockStore,
-  provideMockStore,
-} from '@ngrx/store/testing';
 import {
   Store,
   createSelector,
@@ -20,11 +16,16 @@ import {
   INIT,
   StateObservable,
   ReducerManager,
+  withProps,
 } from '@ngrx/store';
+import {
+  getMockStore,
+  MockReducerManager,
+  MockState,
+  MockStore,
+  provideMockStore,
+} from '../src/public_api';
 import { INCREMENT } from '../../spec/fixtures/counter';
-import { Component, Injector } from '@angular/core';
-import { Observable } from 'rxjs';
-import { By } from '@angular/platform-browser';
 
 interface TestAppSchema {
   counter1: number;
@@ -45,11 +46,27 @@ describe('Mock Store with TestBed', () => {
     () => initialState,
     (state: typeof initialState, add: number) => state.counter4 + add
   );
+  const selectorWithPropsMocked = withProps((add: number) =>
+    createSelector(
+      () => initialState,
+      (state: typeof initialState) => state.counter4 + add
+    )
+  );
 
   const selectorWithProp = createSelector(
     () => initialState,
     (state: typeof initialState, add: number) => state.counter4 + add
   );
+  const selectorWithProps = withProps((add: number) =>
+    createSelector(
+      () => initialState,
+      (state: typeof initialState) => state.counter4 + add
+    )
+  );
+
+  const EXPECTED_VALUES = {
+    selectorWithPropsMocked: 100,
+  };
 
   beforeEach(() => {
     TestBed.configureTestingModule({
@@ -60,6 +77,10 @@ describe('Mock Store with TestBed', () => {
             { selector: stringSelector, value: 87 },
             { selector: memoizedSelector, value: 98 },
             { selector: selectorWithPropMocked, value: 99 },
+            {
+              selector: selectorWithPropsMocked,
+              value: EXPECTED_VALUES.selectorWithPropsMocked,
+            },
           ],
         }),
       ],
@@ -72,6 +93,7 @@ describe('Mock Store with TestBed', () => {
     memoizedSelector.release();
     selectorWithProp.release();
     selectorWithPropMocked.release();
+    selectorWithPropsMocked.release();
     mockStore.resetSelectors();
   });
 
@@ -141,12 +163,34 @@ describe('Mock Store with TestBed', () => {
       .subscribe((result) => expect(result).toBe(expectedValue));
   });
 
+  it('should allow mocking of store.select with a memoized selector with Props using provideMockStore', (done) => {
+    mockStore
+      .select(selectorWithPropsMocked(-EXPECTED_VALUES.selectorWithPropsMocked))
+      .subscribe((result) => {
+        expect(result).toBe(EXPECTED_VALUES.selectorWithPropsMocked);
+        done();
+      });
+  });
+
   it('should allow mocking of store.pipe(select()) with a memoized selector with Prop using provideMockStore', () => {
     const expectedValue = 99;
 
     mockStore
       .pipe(select(selectorWithPropMocked, 200))
       .subscribe((result) => expect(result).toBe(expectedValue));
+  });
+
+  it('should allow mocking of store.pipe(select()) with a memoized selector with Props using provideMockStore', (done) => {
+    mockStore
+      .pipe(
+        select(
+          selectorWithPropsMocked(-EXPECTED_VALUES.selectorWithPropsMocked)
+        )
+      )
+      .subscribe((result) => {
+        expect(result).toBe(EXPECTED_VALUES.selectorWithPropsMocked);
+        done();
+      });
   });
 
   it('should allow mocking of store.select with string selector using overrideSelector', () => {
@@ -197,6 +241,17 @@ describe('Mock Store with TestBed', () => {
       .subscribe((result) => expect(result).toBe(mockValue));
   });
 
+  it('should allow mocking of store.select with a memoized selector with Props using overrideSelector', (done) => {
+    const mockValue = 100;
+
+    mockStore.overrideSelector(selectorWithProps, mockValue);
+
+    mockStore.select(selectorWithProps(200)).subscribe((result) => {
+      expect(result).toBe(mockValue);
+      done();
+    });
+  });
+
   it('should allow mocking of store.pipe(select()) with a memoized selector with Prop using overrideSelector', () => {
     const mockValue = 1000;
 
@@ -207,7 +262,18 @@ describe('Mock Store with TestBed', () => {
       .subscribe((result) => expect(result).toBe(mockValue));
   });
 
-  it('should pass through unmocked selectors with Props using store.pipe(select())', () => {
+  it('should allow mocking of store.pipe(select()) with a memoized selector with Props using overrideSelector', (done) => {
+    const mockValue = 1000;
+
+    mockStore.overrideSelector(selectorWithProps, mockValue);
+
+    mockStore.pipe(select(selectorWithProps(200))).subscribe((result) => {
+      expect(result).toBe(mockValue);
+      done();
+    });
+  });
+
+  it('should pass through unmocked selectors with Prop using store.pipe(select())', () => {
     const selectorWithProp = createSelector(
       () => initialState,
       (state: typeof initialState, add: number) => state.counter4 + add
@@ -218,7 +284,21 @@ describe('Mock Store with TestBed', () => {
       .subscribe((result) => expect(result).toBe(9));
   });
 
-  it('should pass through unmocked selectors with Props using store.select', () => {
+  it('should pass through unmocked selectors with Props using store.pipe(select())', (done) => {
+    const selectorWithProp = withProps((add: number) =>
+      createSelector(
+        () => initialState,
+        (state: typeof initialState) => state.counter4 + add
+      )
+    );
+
+    mockStore.pipe(select(selectorWithProp(6))).subscribe((result) => {
+      expect(result).toBe(9);
+      done();
+    });
+  });
+
+  it('should pass through unmocked selectors with Prop using store.select', () => {
     const selectorWithProp = createSelector(
       () => initialState,
       (state: typeof initialState, add: number) => state.counter4 + add
@@ -227,6 +307,20 @@ describe('Mock Store with TestBed', () => {
     (mockStore as Store<{}>)
       .select(selectorWithProp, 7)
       .subscribe((result) => expect(result).toBe(10));
+  });
+
+  it('should pass through unmocked selectors with Props using store.select', (done) => {
+    const selectorWithProps = withProps((add: number) =>
+      createSelector(
+        () => initialState,
+        (state: typeof initialState) => state.counter4 + add
+      )
+    );
+
+    mockStore.select(selectorWithProps(7)).subscribe((result) => {
+      expect(result).toBe(10);
+      done();
+    });
   });
 
   it('should pass through unmocked selectors', () => {
@@ -611,7 +705,7 @@ describe('Resets selectors after each test', () => {
 
   it('should reset selector - attempt two', (done: any) => {
     setupModules(shouldSetMockStore);
-    const store: Store<{}> = TestBed.inject(Store);
+    const store: Store = TestBed.inject(Store);
     store.select(selectorUnderTest).subscribe((v) => {
       expect(v).toBe(shouldSetMockStore ? 200 : 300);
       shouldSetMockStore = false;

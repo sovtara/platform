@@ -10,6 +10,7 @@ import {
   createSelector,
   MemoizedSelectorWithProps,
   MemoizedSelector,
+  MemoizedPropsSelector,
 } from '@ngrx/store';
 import { MockState } from './mock_state';
 import { MockSelector } from './mock_selector';
@@ -35,7 +36,8 @@ type OnlyMemoized<T, Result> = T extends string | MemoizedSelector<any, any>
 
 type Memoized<Result> =
   | MemoizedSelector<any, Result>
-  | MemoizedSelectorWithProps<any, any, Result>;
+  | MemoizedSelectorWithProps<any, any, Result>
+  | MemoizedPropsSelector<any, any, Result>;
 
 @Injectable()
 export class MockStore<T = object> extends Store<T> {
@@ -72,6 +74,8 @@ export class MockStore<T = object> extends Store<T> {
       ? T
       : Selector extends MemoizedSelectorWithProps<any, any, infer U>
       ? U
+      : Selector extends MemoizedPropsSelector<any, any, infer R>
+      ? R
       : Value
   >(
     selector: Selector | string,

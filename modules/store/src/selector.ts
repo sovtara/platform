@@ -67,6 +67,66 @@ export function resultMemoize(
   return defaultMemoize(projectionFn, isEqualCheck, isResultEqual);
 }
 
+export type MemoizedPropsSelector<
+  Props,
+  State,
+  Result,
+  ProjectorFn = DefaultProjectorFn<Result>
+> = {
+  release(): void;
+  setResult: (result?: Result) => void;
+  clearResult: () => void;
+  (...props: Props[]): MemoizedSelector<State, Result, ProjectorFn>;
+};
+
+export function withProps<
+  Props,
+  State,
+  Result,
+  ProjectorFn = DefaultProjectorFn<Result>
+>(
+  selectorWithProps: (
+    ...props: Props[]
+  ) => MemoizedSelector<State, Result, ProjectorFn>
+): MemoizedPropsSelector<Props, State, Result, ProjectorFn> {
+  let overrideResult: any;
+  const selectorInstances = new Set<
+    MemoizedSelector<State, Result, ProjectorFn>
+  >([]);
+
+  function release() {
+    selectorInstances.forEach((si) => si.release());
+    selectorInstances.clear();
+  }
+
+  function setResult(result: any = undefined) {
+    overrideResult = result;
+    selectorInstances.forEach((si) => si.setResult(result));
+  }
+
+  function clearResult() {
+    overrideResult = undefined;
+    selectorInstances.forEach((si) => si.clearResult());
+  }
+
+  const instanceWrapper = (...props: Props[]) => {
+    const selectorInstance = selectorWithProps(...props);
+    selectorInstances.add(selectorInstance);
+    // with `provideMockStore` the `setResult` method is already invoked
+    // thus, overrideResult is set and we can set the result of the new instance
+    if (overrideResult) {
+      selectorInstance.setResult(overrideResult);
+    }
+    return selectorInstance;
+  };
+
+  return Object.assign(instanceWrapper, {
+    release,
+    setResult,
+    clearResult,
+  });
+}
+
 export function defaultMemoize(
   projectionFn: AnyFn,
   isArgumentsEqual = isEqualCheck,
